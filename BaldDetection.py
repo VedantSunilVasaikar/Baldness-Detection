@@ -1,49 +1,41 @@
 import tkinter as tk
 from tkinter import filedialog
-from PIL import Image, ImageTk
 import cv2
-import numpy as np
+from PIL import Image, ImageTk
 from ultralytics import YOLO
+import torch
 
-model = YOLO("best.pt")
+model = YOLO("bald.pt")
 
-def load_and_preprocess_image(file_path):
-    image = cv2.imread(file_path)
+def preprocess_image(image):
     image = cv2.resize(image, (192, 192))
-    image = image / 255.0
-    image = np.expand_dims(image, axis=0)
-    return image
+    image = image / 255.0 
+    image = torch.from_numpy(image).permute(2, 0, 1).float()
+    return image.unsqueeze(0)
 
 def upload_image():
     file_path = filedialog.askopenfilename()
     if file_path:
-        image = Image.open(file_path)
-        image.thumbnail((300, 300))
-        photo = ImageTk.PhotoImage(image)
+        image = cv2.imread(file_path)
+        image = cv2.resize(image, (300, 300))  # Resize for display
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
-        image_label.config(image=photo)
-        image_label.image = photo
-        image_label.file_path = file_path
-        detect_baldness()
+        detect_baldness(file_path)
 
-def detect_baldness():
-    file_path = image_label.file_path
+def detect_baldness(file_path):
     frame = cv2.imread(file_path)
+    frame_preprocessed = preprocess_image(frame)
 
-    frame_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-
-    results = model.predict(frame_pil)
+    results = model.predict(frame_preprocessed)
 
     for r in results:
-        im_array = r.plot() 
-        detected_image = Image.fromarray(im_array[..., ::-1])  
+        im_array = r.plot()
+        im = Image.fromarray(im_array)
+        imgtk = ImageTk.PhotoImage(image=im)
 
-        detected_image.thumbnail((300, 300))
-
-        detected_photo = ImageTk.PhotoImage(detected_image)
-
-        image_label.config(image=detected_photo)
-        image_label.image = detected_photo
+        result_label.configure(image=imgtk)
+        result_label.image = imgtk
 
 root = tk.Tk()
 root.title("Baldness Detection")
@@ -52,10 +44,7 @@ root.geometry("720x720")
 upload_button = tk.Button(root, text="Upload Image", command=upload_image)
 upload_button.pack(pady=10)
 
-image_label = tk.Label(root)
-image_label.pack(pady=10)
-
-result_label = tk.Label(root, text="")
+result_label = tk.Label(root)
 result_label.pack(pady=10)
 
 root.mainloop()
